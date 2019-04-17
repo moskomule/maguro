@@ -79,8 +79,10 @@ async def distribute_job(command, job_id, args):
     else:
         logger.info(f"start: CUDA_VISIBLE_DEVICES={gpu_id} {command}")
         current_env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-        with (pathlib.Path(args.log_dir) / f"{NOW}-{job_id:0>4}.log").open('w') as f:
-            await run(command.split(), env=current_env, output=f)
+        with (pathlib.Path(args.log_dir) / f"{NOW}-{job_id:0>4}.log").open('w') as log_file:
+            log_file.write(f"maguro {NOW}\n{command}\n{'-'*10}\n\n")
+            log_file.flush()
+            await run(command.split(), env=current_env, output=log_file)
     ticket.sell(gpu_id)
     logger.info(
         COLOR.BLUE + f"finish: CUDA_VISIBLE_DEVICES={gpu_id} {command}" + COLOR.END)

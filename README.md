@@ -18,6 +18,8 @@ Then, if you run these tasks three times each,
 maguro tuna -n 3
 ```
 
+You can use `--dryrun` to check which commands will be executed.
+
 ## Requirements
 
 * Python >= 3.7
