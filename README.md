@@ -18,6 +18,16 @@ Then, if you run these tasks three times each,
 maguro tuna -n 3
 ```
 
+## Requirements
+
+* Python >= 3.7
+
+This library relies only on the standard libraries and `nvidia-smi`.
+
 ## Installation
 
 `pip install -U git+https://github.com/moskomule/maguro`
+
+## Limitation
+
+Currently, each job is assumed to use a single GPU.
