@@ -5,7 +5,7 @@ import asyncio
 import logging
 import os as python_os
 from functools import partial
-from datetime import date
+from datetime import datetime
 
 NOW = datetime.now().strftime("%b%d-%H%M")
 logger = logging.getLogger("maguro")
@@ -22,9 +22,6 @@ def count_gpus():
     try:
         num = len(subprocess.run(
             ["nvidia-smi", "-L"], capture_output=True).stdout.decode('ascii').strip().split("\n"))
-        if num == 0:
-            raise RuntimeError("maguro requires at least 1 GPU")
-        logger.info(COLOR.GREEN + f"Use {num} GPUs" + COLOR.END)
         return num
     except Exception as e:
         raise e
@@ -50,20 +47,24 @@ async def run(command, env, output):
 class TicketSeller(object):
     tickets = list(range(count_gpus()))
 
-    @staticmethod
-    def buy():
-        if len(TicketSeller.tickets) == 0:
+    @classmethod
+    def buy(cls):
+        if len(cls.tickets) == 0:
             return None
         else:
-            return TicketSeller.tickets.pop()
+            return cls.tickets.pop()
 
-    @staticmethod
-    def sell(id):
-        TicketSeller.tickets.append(id)
+    @classmethod
+    def sell(cls, id):
+        cls.tickets.append(id)
 
-    @staticmethod
-    def is_soldout():
-        return len(TicketSeller.tickets) != 0
+    @classmethod
+    def is_soldout(cls):
+        return len(cls.tickets) == 0
+
+    @classmethod
+    def num_tickets(cls):
+        return len(cls.tickets)
 
 
 async def distribute_job(command, job_id, args):
@@ -107,6 +108,7 @@ def main():
     p.add_argument("--num_repeat", "-n", type=int, default=1)
     p.add_argument("--dryrun", action="store_true")
     p.add_argument("--log_dir", default="magulog")
+    p.add_argument("--num_gpus", type=int, default=-1)
     args = p.parse_args()
 
     commands = read_commands(args.commands)
@@ -114,6 +116,17 @@ def main():
     commands = commands * num_repeat
     pathlib.Path(args.log_dir).mkdir(exist_ok=True)
     logger.info(COLOR.GREEN + f"Total: {len(commands)} trials" + COLOR.END)
+
+    if args.num_gpus > TicketSeller.num_tickets():
+        logger.info(
+            f"The total number of GPUs is {TicketSeller.num_tickets()}")
+    elif args.num_gpus != -1:
+        for _ in range(TicketSeller.num_tickets()-args.num_gpus):
+            TicketSeller.tickets.pop()
+    if TicketSeller.num_tickets() < 1:
+        raise RuntimeError("maguro requires at least 1 GPU")
+    logger.info(
+        COLOR.GREEN + f"Resource: {TicketSeller.num_tickets()} GPUs" + COLOR.END)
     asyncio.run(_main(commands, args))
 
 
