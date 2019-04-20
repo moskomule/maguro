@@ -5,108 +5,45 @@ import asyncio
 import logging
 import os as python_os
 from functools import partial
-
-logger = logging.getLogger("maguro")
-logger.setLevel(logging.INFO)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter(
-    '[%(name)s|%(asctime)s] %(message)s', datefmt='%m-%d %H:%M:%S')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+from datetime import datetime
+from .utils import NOW, logger, COLOR, TicketSeller, parse_args, devices
 
 
-def count_gpus():
-    try:
-        num = len(subprocess.run(
-            ["nvidia-smi", "-L"], capture_output=True).stdout.decode('ascii').strip().split("\n"))
-        logger.info(COLOR.GREEN + f"Use {num} GPUs" + COLOR.END)
-        return num
-    except Exception as e:
-        raise e
-
-
-class COLOR:
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    YELLOW = '\033[33m'
-    BLUE = '\033[34m'
-    PURPLE = '\033[35m'
-    CYAN = '\033[36m'
-    END = '\033[0m'
-
-
-async def run(command, env):
+async def run(command, env, output):
     # make subprocess.run async
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, partial(subprocess.run, command, env=env))
+    return await loop.run_in_executor(None, partial(subprocess.run, command, env=env,
+                                                    stdout=output, stderr=subprocess.STDOUT))
 
 
-class Resource(object):
-    tickets = list(range(count_gpus()))
-
-    @staticmethod
-    def buy():
-        if len(Resource.tickets) == 0:
-            return None
-        else:
-            return Resource.tickets.pop()
-
-    @staticmethod
-    def sell(id):
-        Resource.tickets.append(id)
-
-    @staticmethod
-    def has_ticket():
-        return len(Resource.tickets) != 0
-
-
-async def distribute_job(command, dryrun=False):
-    r = Resource()
-    while not r.has_ticket():
+async def distribute_trial(command, trial_id, args):
+    ticket = TicketSeller()
+    while ticket.is_soldout(args.num_gpu_per_trial):
         await asyncio.sleep(10)
-    gpu_id = r.buy()
+    gpu_ids = ticket.buy(args.num_gpu_per_trial)
     current_env = python_os.environ.copy()
-    if dryrun:
-        logger.info(f"dryrun: CUDA_VISIBLE_DEVICES={gpu_id} {command}")
+    cvd = f"CUDA_VISIBLE_DEVICES={devices(gpu_ids)}"
+    if args.dryrun:
+        logger.info(f"dryrun: {cvd} {command}")
         await asyncio.sleep(2)
     else:
-        logger.info(f"start: CUDA_VISIBLE_DEVICES={gpu_id} {command}")
-        current_env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-        await run(command.split(), env=current_env)
-    r.sell(gpu_id)
-    logger.info(
-        COLOR.BLUE + f"finish: CUDA_VISIBLE_DEVICES={gpu_id} {command}" + COLOR.END)
+        logger.info(f"start: {cvd} {command}")
+        current_env["CUDA_VISIBLE_DEVICES"] = devices(gpu_ids)
+        with (pathlib.Path(args.log_dir) / f"{NOW}-{trial_id:0>4}.log").open('w') as log_file:
+            log_file.write(f"maguro {NOW}\n{command}\n{'-'*10}\n\n")
+            log_file.flush()
+            await run(command.split(), env=current_env, output=log_file)
+    ticket.sell(gpu_ids)
+    logger.info(COLOR.colored_str(f"finish: {cvd} {command}", COLOR.GREEN))
 
 
-async def _main(commands, dryrun):
-    await asyncio.gather(*[distribute_job(command, dryrun) for command in commands])
-
-
-def read_commands(path: str):
-    path = pathlib.Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"No such file: {path}")
-
-    with path.open() as f:
-        raw_commands = f.read()
-
-    return raw_commands.strip().split("\n")
+async def _main(commands, args):
+    await asyncio.gather(*[distribute_trial(command, trial_id, args)
+                           for trial_id, command in enumerate(commands)])
 
 
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("commands", help="a file of a list of commands")
-    p.add_argument("--num_repeat", "-n", type=int, default=1)
-    p.add_argument("--dryrun", action="store_true")
-    args = p.parse_args()
-
-    commands = read_commands(args.commands)
-    num_repeat = args.num_repeat
-    commands = commands * num_repeat
-    dryrun = args.dryrun
-    logger.info(COLOR.GREEN + f"Total: {len(commands)} trials" + COLOR.END)
-    asyncio.run(_main(commands, dryrun))
+    asyncio.run(_main(*parse_args()))
 
 
 if __name__ == '__main__':
