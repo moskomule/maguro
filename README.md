@@ -15,7 +15,7 @@ python train.py --model vgg19
 Then, if you run these tasks three times each,
 
 ```
-maguro tuna --num_repeat/-r NUM_REPEAT -n NUM_GPU_PER_TRIAL
+maguro tuna -r NUM_REPEAT -n NUM_GPU_PER_TRIAL
 ```
 
 You can use `--dryrun` to check which commands will be executed.
