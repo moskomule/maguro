@@ -91,20 +91,23 @@ def parse_args():
     p.add_argument("--dryrun", action="store_true")
     p.add_argument("--log_dir", default="magulog")
     p.add_argument("--total_gpus", type=int, default=-1)
-    p.add_argument("--num_gpu_per_job", "-n", type=int, default=1)
+    p.add_argument("--num_gpu_per_trial", "-n", type=int, default=1)
     args = p.parse_args()
 
     commands = read_commands(args.commands)
     num_repeat = args.num_repeat
     commands = commands * num_repeat
+
+    num_gpus = TicketSeller.num_tickets()
+    min_gpus = args.num_gpu_per_trial
+    if num_gpus < min_gpus:
+        raise RuntimeError(COLOR.colored_str(
+            f"maguro requires at least {min_gpus} GPUs "
+            f"but only {num_gpus} GPUs are available", COLOR.RED))
     pathlib.Path(args.log_dir).mkdir(exist_ok=True)
     logger.info(
         COLOR.colored_str(f"Total: {len(commands)} trials", COLOR.GREEN))
 
-    num_gpus = TicketSeller.num_tickets()
-    min_gpus = args.num_gpu_per_job
-    if num_gpus < min_gpus:
-        raise RuntimeError("maguro requires at least {min_gpus} GPU")
     if args.total_gpus == -1:
         args.total_gpus = num_gpus
 
@@ -114,5 +117,6 @@ def parse_args():
         for _ in range(num_gpus-args.total_gpus):
             TicketSeller.tickets.pop()
 
-    logger.info(COLOR.colored_str(f"Resource: {num_gpus} GPUs", COLOR.GREEN))
+    logger.info(COLOR.colored_str(f"Resource: {num_gpus} GPUs "
+                                  f"({args.num_gpu_per_trial} GPUs per trial)", COLOR.GREEN))
     return commands, args

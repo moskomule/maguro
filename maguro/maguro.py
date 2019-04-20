@@ -16,11 +16,11 @@ async def run(command, env, output):
                                                     stdout=output, stderr=subprocess.STDOUT))
 
 
-async def distribute_job(command, job_id, args):
+async def distribute_trial(command, trial_id, args):
     ticket = TicketSeller()
-    while ticket.is_soldout(args.num_gpu_per_job):
+    while ticket.is_soldout(args.num_gpu_per_trial):
         await asyncio.sleep(10)
-    gpu_ids = ticket.buy(args.num_gpu_per_job)
+    gpu_ids = ticket.buy(args.num_gpu_per_trial)
     current_env = python_os.environ.copy()
     cvd = f"CUDA_VISIBLE_DEVICES={devices(gpu_ids)}"
     if args.dryrun:
@@ -29,7 +29,7 @@ async def distribute_job(command, job_id, args):
     else:
         logger.info(f"start: {cvd} {command}")
         current_env["CUDA_VISIBLE_DEVICES"] = devices(gpu_ids)
-        with (pathlib.Path(args.log_dir) / f"{NOW}-{job_id:0>4}.log").open('w') as log_file:
+        with (pathlib.Path(args.log_dir) / f"{NOW}-{trial_id:0>4}.log").open('w') as log_file:
             log_file.write(f"maguro {NOW}\n{command}\n{'-'*10}\n\n")
             log_file.flush()
             await run(command.split(), env=current_env, output=log_file)
@@ -38,8 +38,8 @@ async def distribute_job(command, job_id, args):
 
 
 async def _main(commands, args):
-    await asyncio.gather(*[distribute_job(command, job_id, args)
-                           for job_id, command in enumerate(commands)])
+    await asyncio.gather(*[distribute_trial(command, trial_id, args)
+                           for trial_id, command in enumerate(commands)])
 
 
 def main():
