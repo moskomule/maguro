@@ -179,13 +179,14 @@ class Command(object):
 
     @staticmethod
     def push(args):
-        command = " ".join(args.command)
-        task = {"num_gpus": args.num_gpus,
-                "command": command,
-                "log_dir": args.log_dir}
-        for _ in range(args.num_repeat):
-            add_task(task)
-            logger.info(COLOR.colored_str(f"push: {command}", COLOR.BLUE))
+        if len(args.command) > 0:
+            command = " ".join(args.command)
+            task = {"num_gpus": args.num_gpus,
+                    "command": command,
+                    "log_dir": args.log_dir}
+            for _ in range(args.num_repeat):
+                add_task(task)
+                logger.info(COLOR.colored_str(f"push: {command}", COLOR.BLUE))
 
     @staticmethod
     def list(args):
@@ -220,7 +221,7 @@ def main():
     p_push.add_argument("--num_repeat", "-r", type=int, default=1)
     p_push.add_argument("--num_gpus", "-g", type=int, default=1)
     p_push.add_argument("--log_dir", default="maglog")
-    p_push.add_argument("command", nargs=argparse.REMAINDER, required=True)
+    p_push.add_argument("command", nargs=argparse.REMAINDER)
     p_push.set_defaults(func=Command.push)
 
     p_list = sub.add_parser("list")
