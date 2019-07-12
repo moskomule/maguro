@@ -229,7 +229,7 @@ def main():
     p_list.set_defaults(func=Command.list)
 
     p_del = sub.add_parser("delete")
-    p_del.add_argument("ids", nargs="+", required=True)
+    p_del.add_argument("ids", nargs="+")
     p_del.set_defaults(func=Command.delete)
 
     args = p.parse_args()
