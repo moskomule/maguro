@@ -217,11 +217,10 @@ def main():
     p_run.set_defaults(func=Command.run)
 
     p_push = sub.add_parser("push")
-    p_push.add_argument("--num_repeat", type=int, default=1)
-    p_push.add_argument("--num_gpus", type=int, default=1)
+    p_push.add_argument("--num_repeat", "-r", type=int, default=1)
+    p_push.add_argument("--num_gpus", "-g", type=int, default=1)
     p_push.add_argument("--log_dir", default="maglog")
-    p_push.add_argument("--high_priority", action="store_true")
-    p_push.add_argument("command", nargs=argparse.REMAINDER)
+    p_push.add_argument("command", nargs=argparse.REMAINDER, required=True)
     p_push.set_defaults(func=Command.push)
 
     p_list = sub.add_parser("list")
@@ -229,7 +228,7 @@ def main():
     p_list.set_defaults(func=Command.list)
 
     p_del = sub.add_parser("delete")
-    p_del.add_argument("ids", nargs="+")
+    p_del.add_argument("ids", nargs="+", required=True)
     p_del.set_defaults(func=Command.delete)
 
     args = p.parse_args()
