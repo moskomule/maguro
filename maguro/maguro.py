@@ -179,14 +179,19 @@ class Command(object):
 
     @staticmethod
     def push(args):
-        if len(args.command) > 0:
-            command = " ".join(args.command)
-            task = {"num_gpus": args.num_gpus,
-                    "command": command,
-                    "log_dir": args.log_dir}
-            for _ in range(args.num_repeat):
-                add_task(task)
-                logger.info(COLOR.colored_str(f"push: {command}", COLOR.BLUE))
+        exec = args.exec
+        script = args.script
+        command = " ".join(args.args)
+        if len(exec) == 0 or len(script) == 0:
+            raise RuntimeError('Need to specify exec and script')
+        script = Path(script).absolute()
+        command = f"{exec} {script} {command}"
+        task = {"num_gpus": args.num_gpus,
+                "command": command,
+                "log_dir": args.log_dir}
+        for _ in range(args.num_repeat):
+            add_task(task)
+            logger.info(COLOR.colored_str(f"push: {command}", COLOR.BLUE))
 
     @staticmethod
     def list(args):
@@ -221,7 +226,9 @@ def main():
     p_push.add_argument("--num_repeat", "-r", type=int, default=1)
     p_push.add_argument("--num_gpus", "-g", type=int, default=1)
     p_push.add_argument("--log_dir", default="maglog")
-    p_push.add_argument("command", nargs=argparse.REMAINDER)
+    p_push.add_argument("exec")
+    p_push.add_argument("script")
+    p_push.add_argument("args", nargs=argparse.REMAINDER)
     p_push.set_defaults(func=Command.push)
 
     p_list = sub.add_parser("list")

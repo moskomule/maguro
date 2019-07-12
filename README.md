@@ -20,7 +20,9 @@ This library relies only on the standard libraries and `nvidia-smi`.
 maguro push [-r,--num_repeat 1] [-g,--num_gpus 1] [--logdir maglog] COMMAND
 ```
 
-Here, `COMMAND` is like `python train.py`. `--num_gpus` specifies the number of GPUs required to run the submitted job. 
+Here, `COMMAND` is like `python ~/train.py`. `--num_gpus` specifies the number of GPUs required to run the submitted job.
+
+**Note that paths in `COMMAND` should be absolute if you run from different directory** 
 
 ### Run jobs
 
