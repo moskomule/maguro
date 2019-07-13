@@ -240,7 +240,7 @@ def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers()
     p_run = sub.add_parser("run")
-    p.add_argument("--forever", action="store_true")
+    p_run.add_argument("--forever", action="store_true")
     p_run.set_defaults(func=Command.run)
 
     p_push = sub.add_parser("push")
