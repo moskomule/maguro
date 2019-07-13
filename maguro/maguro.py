@@ -7,6 +7,7 @@ from datetime import datetime
 from functools import partial
 from os import remove, environ
 from pathlib import Path
+from time import sleep
 from typing import Optional
 
 NOW = datetime.now().strftime("%b%d-%H%M")
@@ -50,12 +51,12 @@ class COLOR:
         return color + s + cls.END
 
 
-def task_list(_type):
+def list_task(_type):
     return sorted([_type(f.stem) for f in MAGURO_FILE_PATH.iterdir()])
 
 
 def add_task(task: dict) -> None:
-    tasks = task_list(int)
+    tasks = list_task(int)
     if len(tasks) == 0:
         task_id = 1
     else:
@@ -77,14 +78,8 @@ def load_task(task_id: int) -> Optional[dict]:
     return task
 
 
-def devices(ids: list):
-    ids = [str(i) for i in ids]
-    return ",".join(ids)
-
-
 class Ticket(object):
     AVAILABLE_LIST = list(range(count_gpus()))
-    RESERVED_LIST = []
 
     @classmethod
     def buy(cls,
@@ -117,6 +112,11 @@ async def run_task(command: list,
                                               stdout=output, stderr=subprocess.STDOUT))
 
 
+def format_devices(ids: list):
+    ids = [str(i) for i in ids]
+    return ",".join(ids)
+
+
 async def distribute_task(task_id: int):
     ticket = Ticket()
     task = load_task(task_id)
@@ -127,8 +127,9 @@ async def distribute_task(task_id: int):
         gpu_ids = ticket.buy(num_gpus)
         current_env = environ.copy()
         command = task["command"]
-        logger.info(f"start (gpu={devices(gpu_ids):>2}): {command}")
-        current_env["CUDA_VISIBLE_DEVICES"] = devices(gpu_ids)
+        logger.info(f"start (gpu={format_devices(gpu_ids):>2}): {command}")
+        current_env["CUDA_VISIBLE_DEVICES"] = format_devices(gpu_ids)
+        current_env.update(task["env"])
         log_dir = Path(task["log_dir"])
         if not log_dir.exists():
             log_dir.mkdir(parents=True)
@@ -143,7 +144,7 @@ async def distribute_task(task_id: int):
 async def daemon():
     queue = asyncio.Queue()
     queued_tasks = set()
-    for t in task_list(int):
+    for t in list_task(int):
         queue.put_nowait(t)
         queued_tasks.add(t)
 
@@ -152,7 +153,7 @@ async def daemon():
             t = await queue.get()
             queued_tasks.remove(t)
             await distribute_task(t)
-            new_tasks = set(task_list(int)) - queued_tasks
+            new_tasks = set(list_task(int)) - queued_tasks
             if len(new_tasks) > 0:
                 for t in new_tasks:
                     queue.put_nowait(t)
@@ -163,19 +164,34 @@ async def daemon():
 
 
 class Command(object):
+
+    @staticmethod
+    def _run(args):
+        active = True
+        MAGURO_RUNNING.touch()
+
+        try:
+            while active:
+                if len(list_task(int)) > 0:
+                    asyncio.run(daemon())
+                else:
+                    sleep(30)
+                active = args.forever  # if not forever, while loop finishes
+            logger.info(COLOR.colored_str("finish all tasks", COLOR.GREEN))
+        except KeyboardInterrupt:
+            num_active = count_gpus() - Ticket.num_tickets()
+            logger.warning(f"Keyboard Interrupted! {num_active} tasks might not finish properly.")
+        finally:
+            remove(MAGURO_RUNNING)
+
     @staticmethod
     def run(args):
         if MAGURO_RUNNING.exists():
-            logger.warning(COLOR.colored_str("maguro is already running", COLOR.RED))
-        elif len(task_list(str)) == 0:
+            logger.warning(COLOR.colored_str("maguro is already running < ﾟ )))>< ﾟ )))><", COLOR.RED))
+        elif len(list_task(str)) == 0:
             logger.warning(COLOR.colored_str("No task remaining", COLOR.RED))
         else:
-            MAGURO_RUNNING.touch()
-            try:
-                asyncio.run(daemon())
-                logger.info(COLOR.colored_str("finish all tasks", COLOR.GREEN))
-            finally:
-                remove(MAGURO_RUNNING)
+            Command._run(args)
 
     @staticmethod
     def push(args):
@@ -183,19 +199,23 @@ class Command(object):
         script = args.script
         command = " ".join(args.args)
         if len(exec) == 0 or len(script) == 0:
-            raise RuntimeError('Need to specify exec and script')
+            raise RuntimeError("Need to specify exec and script (like `python train.py`)")
         script = Path(script).absolute()
         command = f"{exec} {script} {command}"
-        task = {"num_gpus": args.num_gpus,
-                "command": command,
-                "log_dir": args.log_dir}
+        current_env = environ.copy()
+        if current_env.get("CUDA_VISIBLE_DEVICES") is not None:
+            current_env.pop("CUDA_VISIBLE_DEVICES")
+        task_config = {"num_gpus": args.num_gpus,
+                       "command": command,
+                       "log_dir": args.log_dir,
+                       "env": current_env}
         for _ in range(args.num_repeat):
-            add_task(task)
+            add_task(task_config)
             logger.info(COLOR.colored_str(f"push: {command}", COLOR.BLUE))
 
     @staticmethod
     def list(args):
-        tasks = task_list(str)
+        tasks = list_task(str)
         suffix = "s" if len(tasks) > 1 else ""
         logger.info(f"maguro has {len(tasks)} remaining task{suffix}")
         if args.all:
@@ -220,6 +240,7 @@ def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers()
     p_run = sub.add_parser("run")
+    p.add_argument("--forever", action="store_true")
     p_run.set_defaults(func=Command.run)
 
     p_push = sub.add_parser("push")

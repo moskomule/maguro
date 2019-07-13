@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="maguro",
-    version="0.2",
+    version="0.3",
     author="moskomule",
     author_email="hataya@nlab.jp",
     packages=find_packages(),

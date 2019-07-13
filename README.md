@@ -27,7 +27,7 @@ Here, `COMMAND` is like `python ~/train.py`. `--num_gpus` specifies the number o
 ### Run jobs
 
 ```bash
-maguro run
+maguro run [--forever]
 ```
 
 ### List remaining jobs
