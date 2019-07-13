@@ -188,7 +188,7 @@ class Command(object):
     def run(args):
         if MAGURO_RUNNING.exists():
             logger.warning(COLOR.colored_str("maguro is already running < ﾟ )))>< ﾟ )))><", COLOR.RED))
-        elif len(list_task(str)) == 0:
+        elif len(list_task(str)) == 0 and not args.forever:
             logger.warning(COLOR.colored_str("No task remaining", COLOR.RED))
         else:
             Command._run(args)
