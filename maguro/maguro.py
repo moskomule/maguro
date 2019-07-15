@@ -172,10 +172,11 @@ class Command(object):
 
         try:
             while active:
+                # check if there are tasks every 5 seconds
                 if len(list_task(int)) > 0:
                     asyncio.run(daemon())
                 else:
-                    sleep(30)
+                    sleep(5)
                 active = args.forever  # if not forever, while loop finishes
             logger.info(COLOR.colored_str("finish all tasks", COLOR.GREEN))
         except KeyboardInterrupt:
