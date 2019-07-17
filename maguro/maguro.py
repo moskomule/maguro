@@ -10,7 +10,6 @@ from pathlib import Path
 from time import sleep
 from typing import Optional
 
-NOW = datetime.now().strftime("%b%d-%H%M")
 MAGURO_RUNNING = Path("/tmp/maguro.running")
 MAGURO_FILE_PATH = Path("/tmp/maguro_never_stop")
 if not MAGURO_FILE_PATH.exists():
@@ -24,6 +23,10 @@ formatter = logging.Formatter(
     '[%(name)s|%(asctime)s] %(message)s', datefmt='%m-%d %H:%M:%S')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
+
+
+def now():
+    return datetime.now().strftime("%b%d-%H%M")
 
 
 def count_gpus():
@@ -131,10 +134,11 @@ async def distribute_task(task_id: int):
         current_env["CUDA_VISIBLE_DEVICES"] = format_devices(gpu_ids)
         current_env.update(task["env"])
         log_dir = Path(task["log_dir"])
+        _now = now()
         if not log_dir.exists():
             log_dir.mkdir(parents=True)
-        with (log_dir / f"{NOW}-{task['id']}.log").open('w') as log_f:
-            log_f.write(f"maguro {NOW}\n{command}\n{'-' * 10}\n\n")
+        with (log_dir / f"{_now}-{task['id']}.log").open('w') as log_f:
+            log_f.write(f"maguro {_now}\n{command}\n{'-' * 10}\n\n")
             log_f.flush()
             await run_task(command.split(), env=current_env, output=log_f)
         ticket.sell(gpu_ids)

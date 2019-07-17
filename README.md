@@ -2,6 +2,8 @@
 
 `maguro` is a simple job scheduler for multiple-GPU enviroments.
 
+**Scheduling is not the optimal**, but you do not need run scripts manually after you register (`push`) tasks.
+
 ## Requirements
 
 * Python >= 3.7
