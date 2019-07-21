@@ -25,10 +25,6 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 
-def now():
-    return datetime.now().strftime("%b%d-%H%M")
-
-
 def count_gpus():
     try:
         num = len(subprocess.run(
@@ -36,6 +32,13 @@ def count_gpus():
         return num
     except Exception as e:
         raise e
+
+
+NUM_GPUS = count_gpus()
+
+
+def now():
+    return datetime.now().strftime("%b%d-%H%M%S")
 
 
 class COLOR:
@@ -82,7 +85,7 @@ def load_task(task_id: int) -> Optional[dict]:
 
 
 class Ticket(object):
-    AVAILABLE_LIST = list(range(count_gpus()))
+    AVAILABLE_LIST = list(range(NUM_GPUS))
 
     @classmethod
     def buy(cls,
@@ -151,28 +154,31 @@ async def daemon():
     queue = asyncio.Queue()
     queued_tasks = set()
     running_tasks = set()
+
     for t in list_task(int):
         queue.put_nowait(t)
         queued_tasks.add(t)
 
-    async def consume():
-        while not queue.empty():
-            t = await queue.get()
-            queued_tasks.remove(t)
-            running_tasks.add(t)
-            t = await distribute_task(t)
-            running_tasks.remove(t)
-            new_tasks = set(list_task(int)) - queued_tasks
-            if len(new_tasks) > 0:
-                for nt in new_tasks:
-                    queue.put_nowait(nt)
-                    queued_tasks.add(nt)
-                logger.info(f"{len(new_tasks)} tasks are added")
+    async def consume(i):
+        # all loop should finish iff
+        # queue is empty and no running task is remaining
+        while not (queue.empty() and len(running_tasks) == 0):
+            try:
+                t = await asyncio.wait_for(queue.get(), 10)
+                queued_tasks.remove(t)
+                running_tasks.add(t)
+                await distribute_task(t)
+                running_tasks.remove(t)
+                new_tasks = set(list_task(int)) - queued_tasks
+                if len(new_tasks) > 0:
+                    for nt in new_tasks:
+                        queue.put_nowait(nt)
+                        queued_tasks.add(nt)
+                    logger.info(f"{len(new_tasks)} tasks are added")
+            except asyncio.TimeoutError:
+                pass
 
-            while queue.empty() and len(running_tasks) > 0:
-                await asyncio.sleep(10)
-
-    await asyncio.wait([consume() for _ in range(count_gpus())])
+    await asyncio.wait([consume(i) for i in range(NUM_GPUS)])
 
 
 class Command(object):
@@ -187,12 +193,14 @@ class Command(object):
                 # check if there are tasks every 5 seconds
                 if len(list_task(int)) > 0:
                     asyncio.run(daemon())
+                    if args.forever:
+                        logger.info(COLOR.colored_str("finished queued tasks", COLOR.YELLOW))
                 else:
                     sleep(5)
                 active = args.forever  # if not forever, while loop finishes
             logger.info(COLOR.colored_str("finish all tasks", COLOR.GREEN))
         except KeyboardInterrupt:
-            num_active = count_gpus() - Ticket.num_tickets()
+            num_active = NUM_GPUS - Ticket.num_tickets()
             logger.warning(f"Keyboard Interrupted! {num_active} tasks might not finish properly.")
         finally:
             remove(MAGURO_RUNNING)
