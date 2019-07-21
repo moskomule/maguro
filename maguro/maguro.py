@@ -159,7 +159,7 @@ async def daemon():
         queue.put_nowait(t)
         queued_tasks.add(t)
 
-    async def consume(i):
+    async def consume():
         # all loop should finish iff
         # queue is empty and no running task is remaining
         while not (queue.empty() and len(running_tasks) == 0):
@@ -178,7 +178,7 @@ async def daemon():
             except asyncio.TimeoutError:
                 pass
 
-    await asyncio.wait([consume(i) for i in range(NUM_GPUS)])
+    await asyncio.wait([consume() for _ in range(NUM_GPUS)])
 
 
 class Command(object):
