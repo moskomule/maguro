@@ -120,34 +120,37 @@ def format_devices(ids: list):
     return ",".join(ids)
 
 
-async def distribute_task(task_id: int):
+async def distribute_task(task_id: int) -> Optional[int]:
     ticket = Ticket()
     task = load_task(task_id)
-    if task is not None:
-        num_gpus = task["num_gpus"]
-        while ticket.is_soldout(num_gpus):
-            await asyncio.sleep(1)
-        gpu_ids = ticket.buy(num_gpus)
-        current_env = environ.copy()
-        command = task["command"]
-        logger.info(f"start (gpu={format_devices(gpu_ids):>2}): {command}")
-        current_env["CUDA_VISIBLE_DEVICES"] = format_devices(gpu_ids)
-        current_env.update(task["env"])
-        log_dir = Path(task["log_dir"])
-        _now = now()
-        if not log_dir.exists():
-            log_dir.mkdir(parents=True)
-        with (log_dir / f"{_now}-{task['id']}.log").open('w') as log_f:
-            log_f.write(f"maguro {_now}\n{command}\n{'-' * 10}\n\n")
-            log_f.flush()
-            await run_task(command.split(), env=current_env, output=log_f)
-        ticket.sell(gpu_ids)
-        logger.info(COLOR.colored_str(f"finish: {command}", COLOR.GREEN))
+    if task is None:
+        return None
+    num_gpus = task["num_gpus"]
+    while ticket.is_soldout(num_gpus):
+        await asyncio.sleep(1)
+    gpu_ids = ticket.buy(num_gpus)
+    current_env = environ.copy()
+    command = task["command"]
+    logger.info(f"start (gpu={format_devices(gpu_ids):>2}): {command}")
+    current_env["CUDA_VISIBLE_DEVICES"] = format_devices(gpu_ids)
+    current_env.update(task["env"])
+    log_dir = Path(task["log_dir"])
+    _now = now()
+    if not log_dir.exists():
+        log_dir.mkdir(parents=True)
+    with (log_dir / f"{_now}-{task['id']}.log").open('w') as log_f:
+        log_f.write(f"maguro {_now}\n{command}\n{'-' * 10}\n\n")
+        log_f.flush()
+        await run_task(command.split(), env=current_env, output=log_f)
+    ticket.sell(gpu_ids)
+    logger.info(COLOR.colored_str(f"finish: {command}", COLOR.GREEN))
+    return task_id
 
 
 async def daemon():
     queue = asyncio.Queue()
     queued_tasks = set()
+    running_tasks = set()
     for t in list_task(int):
         queue.put_nowait(t)
         queued_tasks.add(t)
@@ -156,13 +159,18 @@ async def daemon():
         while not queue.empty():
             t = await queue.get()
             queued_tasks.remove(t)
-            await distribute_task(t)
+            running_tasks.add(t)
+            t = await distribute_task(t)
+            running_tasks.remove(t)
             new_tasks = set(list_task(int)) - queued_tasks
             if len(new_tasks) > 0:
-                for t in new_tasks:
-                    queue.put_nowait(t)
-                    queued_tasks.add(t)
+                for nt in new_tasks:
+                    queue.put_nowait(nt)
+                    queued_tasks.add(nt)
                 logger.info(f"{len(new_tasks)} tasks are added")
+
+            while queue.empty() and len(running_tasks) > 0:
+                await asyncio.sleep(10)
 
     await asyncio.wait([consume() for _ in range(count_gpus())])
 
